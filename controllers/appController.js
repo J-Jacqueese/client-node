@@ -1,0 +1,200 @@
+const db = require('../config/database');
+
+// 获取所有应用
+exports.getAllApps = async (req, res) => {
+  try {
+    const { category, sort = 'upvotes', search } = req.query;
+    
+    let sql = `
+      SELECT a.*, c.name as category_name,
+        GROUP_CONCAT(t.name) as tags
+      FROM apps a
+      LEFT JOIN categories c ON a.category_id = c.id
+      LEFT JOIN app_tags at ON a.id = at.app_id
+      LEFT JOIN tags t ON at.tag_id = t.id
+    `;
+    
+    const conditions = [];
+    const params = [];
+    
+    if (category && category !== '0') {
+      conditions.push('a.category_id = ?');
+      params.push(category);
+    }
+    
+    if (search) {
+      conditions.push('(a.name LIKE ? OR a.developer LIKE ? OR a.description LIKE ?)');
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+    }
+    
+    if (conditions.length > 0) {
+      sql += ' WHERE ' + conditions.join(' AND ');
+    }
+    
+    sql += ' GROUP BY a.id';
+    
+    // 排序
+    switch (sort) {
+      case 'views':
+        sql += ' ORDER BY a.views DESC';
+        break;
+      case 'latest':
+        sql += ' ORDER BY a.created_at DESC';
+        break;
+      default:
+        sql += ' ORDER BY a.upvotes DESC';
+    }
+    
+    const [rows] = await db.query(sql, params);
+    
+    const apps = rows.map(row => ({
+      ...row,
+      tags: row.tags ? row.tags.split(',') : []
+    }));
+    
+    res.json({ success: true, data: apps });
+  } catch (error) {
+    console.error('Error fetching apps:', error);
+    res.status(500).json({ success: false, message: '获取应用列表失败' });
+  }
+};
+
+// 获取单个应用详情
+exports.getAppById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const sql = `
+      SELECT a.*, c.name as category_name,
+        GROUP_CONCAT(t.name) as tags
+      FROM apps a
+      LEFT JOIN categories c ON a.category_id = c.id
+      LEFT JOIN app_tags at ON a.id = at.app_id
+      LEFT JOIN tags t ON at.tag_id = t.id
+      WHERE a.id = ?
+      GROUP BY a.id
+    `;
+    
+    const [rows] = await db.query(sql, [id]);
+    
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, message: '应用不存在' });
+    }
+    
+    const app = {
+      ...rows[0],
+      tags: rows[0].tags ? rows[0].tags.split(',') : []
+    };
+    
+    // 增加浏览量
+    await db.query('UPDATE apps SET views = views + 1 WHERE id = ?', [id]);
+    
+    res.json({ success: true, data: app });
+  } catch (error) {
+    console.error('Error fetching app:', error);
+    res.status(500).json({ success: false, message: '获取应用详情失败' });
+  }
+};
+
+// 创建应用
+exports.createApp = async (req, res) => {
+  try {
+    const {
+      name, developer, avatar, icon_bg, category_id,
+      description, detail, version, base_model,
+      website_url, comparison, tags
+    } = req.body;
+    
+    const sql = `
+      INSERT INTO apps (
+        name, developer, avatar, icon_bg, category_id,
+        description, detail, version, base_model,
+        website_url, comparison
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+    
+    const [result] = await db.query(sql, [
+      name, developer, avatar || null, icon_bg || null,
+      category_id || null, description || null, detail || null,
+      version || null, base_model || null, website_url || null,
+      comparison || null
+    ]);
+    
+    const appId = result.insertId;
+    
+    // 插入标签关联
+    if (tags && tags.length > 0) {
+      const tagValues = tags.map(tagId => [appId, tagId]);
+      await db.query('INSERT INTO app_tags (app_id, tag_id) VALUES ?', [tagValues]);
+    }
+    
+    res.json({ success: true, message: '创建成功', id: appId });
+  } catch (error) {
+    console.error('Error creating app:', error);
+    res.status(500).json({ success: false, message: '创建应用失败' });
+  }
+};
+
+// 更新应用
+exports.updateApp = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      name, developer, avatar, icon_bg, category_id,
+      description, detail, version, base_model,
+      website_url, comparison, tags
+    } = req.body;
+    
+    const sql = `
+      UPDATE apps SET
+        name = ?, developer = ?, avatar = ?, icon_bg = ?,
+        category_id = ?, description = ?, detail = ?,
+        version = ?, base_model = ?, website_url = ?,
+        comparison = ?
+      WHERE id = ?
+    `;
+    
+    await db.query(sql, [
+      name, developer, avatar || null, icon_bg || null,
+      category_id || null, description || null, detail || null,
+      version || null, base_model || null, website_url || null,
+      comparison || null, id
+    ]);
+    
+    // 更新标签关联
+    await db.query('DELETE FROM app_tags WHERE app_id = ?', [id]);
+    if (tags && tags.length > 0) {
+      const tagValues = tags.map(tagId => [id, tagId]);
+      await db.query('INSERT INTO app_tags (app_id, tag_id) VALUES ?', [tagValues]);
+    }
+    
+    res.json({ success: true, message: '更新成功' });
+  } catch (error) {
+    console.error('Error updating app:', error);
+    res.status(500).json({ success: false, message: '更新应用失败' });
+  }
+};
+
+// 删除应用
+exports.deleteApp = async (req, res) => {
+  try {
+    const { id } = req.params;
+    await db.query('DELETE FROM apps WHERE id = ?', [id]);
+    res.json({ success: true, message: '删除成功' });
+  } catch (error) {
+    console.error('Error deleting app:', error);
+    res.status(500).json({ success: false, message: '删除应用失败' });
+  }
+};
+
+// 点赞应用
+exports.upvoteApp = async (req, res) => {
+  try {
+    const { id } = req.params;
+    await db.query('UPDATE apps SET upvotes = upvotes + 1 WHERE id = ?', [id]);
+    res.json({ success: true, message: '点赞成功' });
+  } catch (error) {
+    console.error('Error upvoting app:', error);
+    res.status(500).json({ success: false, message: '点赞失败' });
+  }
+};
