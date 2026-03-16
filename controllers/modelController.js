@@ -192,22 +192,22 @@ exports.createModel = async (req, res) => {
   try {
     const {
       name, author, avatar, version, base_model, category_id,
-      description, readme, prompt_example, comparison,
+      description, readme, prompt_example, comparison, model_type,
       download_links, files, tags
     } = req.body;
     
     const sql = `
       INSERT INTO models (
         name, author, avatar, version, base_model, category_id,
-        description, readme, prompt_example, comparison,
+        description, readme, prompt_example, comparison, model_type,
         download_links, files
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     
     const [result] = await db.query(sql, [
       name, author, avatar || null, version || null, base_model || null,
       category_id || null, description || null, readme || null,
-      prompt_example || null, comparison || null,
+      prompt_example || null, comparison || null, model_type || null,
       JSON.stringify(download_links || []),
       JSON.stringify(files || [])
     ]);
@@ -233,7 +233,7 @@ exports.updateModel = async (req, res) => {
     const { id } = req.params;
     const {
       name, author, avatar, version, base_model, category_id,
-      description, readme, prompt_example, comparison,
+      description, readme, prompt_example, comparison, model_type,
       download_links, files, tags
     } = req.body;
     
@@ -241,14 +241,14 @@ exports.updateModel = async (req, res) => {
       UPDATE models SET
         name = ?, author = ?, avatar = ?, version = ?, base_model = ?,
         category_id = ?, description = ?, readme = ?, prompt_example = ?,
-        comparison = ?, download_links = ?, files = ?
+        comparison = ?, model_type = ?, download_links = ?, files = ?
       WHERE id = ?
     `;
     
     await db.query(sql, [
       name, author, avatar || null, version || null, base_model || null,
       category_id || null, description || null, readme || null,
-      prompt_example || null, comparison || null,
+      prompt_example || null, comparison || null, model_type || null,
       JSON.stringify(download_links || []),
       JSON.stringify(files || []),
       id

@@ -47,10 +47,26 @@ exports.getAllApps = async (req, res) => {
     
     const [rows] = await db.query(sql, params);
     
-    const apps = rows.map(row => ({
-      ...row,
-      tags: row.tags ? row.tags.split(',') : []
-    }));
+    const apps = rows.map((row) => {
+      let downloadLinks = [];
+      if (row.download_links) {
+        try {
+          if (typeof row.download_links === 'string') {
+            downloadLinks = JSON.parse(row.download_links);
+          } else if (Array.isArray(row.download_links)) {
+            downloadLinks = row.download_links;
+          }
+        } catch (e) {
+          console.error('Error parsing app download_links:', e, row.download_links);
+        }
+      }
+
+      return {
+        ...row,
+        tags: row.tags ? row.tags.split(',') : [],
+        download_links: Array.isArray(downloadLinks) ? downloadLinks : [],
+      };
+    });
     
     res.json({ success: true, data: apps });
   } catch (error) {
@@ -81,9 +97,23 @@ exports.getAppById = async (req, res) => {
       return res.status(404).json({ success: false, message: '应用不存在' });
     }
     
+    let downloadLinks = [];
+    if (rows[0].download_links) {
+      try {
+        if (typeof rows[0].download_links === 'string') {
+          downloadLinks = JSON.parse(rows[0].download_links);
+        } else if (Array.isArray(rows[0].download_links)) {
+          downloadLinks = rows[0].download_links;
+        }
+      } catch (e) {
+        console.error('Error parsing app download_links:', e, rows[0].download_links);
+      }
+    }
+
     const app = {
       ...rows[0],
-      tags: rows[0].tags ? rows[0].tags.split(',') : []
+      tags: rows[0].tags ? rows[0].tags.split(',') : [],
+      download_links: Array.isArray(downloadLinks) ? downloadLinks : [],
     };
     
     // 增加浏览量
@@ -102,22 +132,24 @@ exports.createApp = async (req, res) => {
     const {
       name, developer, avatar, icon_bg, category_id,
       description, detail, version, base_model,
-      website_url, comparison, tags
+      website_url, comparison, tags, upvotes, download_links
     } = req.body;
+
+    const normalizedUpvotes = Number.isFinite(Number(upvotes)) ? Number(upvotes) : 0;
     
     const sql = `
       INSERT INTO apps (
         name, developer, avatar, icon_bg, category_id,
         description, detail, version, base_model,
-        website_url, comparison
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        website_url, comparison, upvotes, download_links
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     
     const [result] = await db.query(sql, [
       name, developer, avatar || null, icon_bg || null,
       category_id || null, description || null, detail || null,
       version || null, base_model || null, website_url || null,
-      comparison || null
+      comparison || null, normalizedUpvotes, JSON.stringify(download_links || [])
     ]);
     
     const appId = result.insertId;
@@ -142,24 +174,30 @@ exports.updateApp = async (req, res) => {
     const {
       name, developer, avatar, icon_bg, category_id,
       description, detail, version, base_model,
-      website_url, comparison, tags
+      website_url, comparison, tags, upvotes, download_links
     } = req.body;
+
+    const normalizedUpvotes = Number.isFinite(Number(upvotes)) ? Number(upvotes) : 0;
     
     const sql = `
       UPDATE apps SET
         name = ?, developer = ?, avatar = ?, icon_bg = ?,
         category_id = ?, description = ?, detail = ?,
         version = ?, base_model = ?, website_url = ?,
-        comparison = ?
+        comparison = ?, upvotes = ?, download_links = ?
       WHERE id = ?
     `;
     
-    await db.query(sql, [
+    const [updateResult] = await db.query(sql, [
       name, developer, avatar || null, icon_bg || null,
       category_id || null, description || null, detail || null,
       version || null, base_model || null, website_url || null,
-      comparison || null, id
+      comparison || null, normalizedUpvotes, JSON.stringify(download_links || []), id
     ]);
+
+    if (!updateResult.affectedRows) {
+      return res.status(404).json({ success: false, message: '应用不存在或未更新' });
+    }
     
     // 更新标签关联
     await db.query('DELETE FROM app_tags WHERE app_id = ?', [id]);
@@ -168,7 +206,12 @@ exports.updateApp = async (req, res) => {
       await db.query('INSERT INTO app_tags (app_id, tag_id) VALUES ?', [tagValues]);
     }
     
-    res.json({ success: true, message: '更新成功' });
+    const [updatedRows] = await db.query('SELECT id, upvotes FROM apps WHERE id = ?', [id]);
+    res.json({
+      success: true,
+      message: '更新成功',
+      data: updatedRows[0] || { id: Number(id), upvotes: normalizedUpvotes },
+    });
   } catch (error) {
     console.error('Error updating app:', error);
     res.status(500).json({ success: false, message: '更新应用失败' });
