@@ -3,14 +3,25 @@ const db = require('../config/database');
 // 获取分类列表
 exports.getAllCategories = async (req, res) => {
   try {
-    const { type } = req.query;
+    const { type, search } = req.query;
     
     let sql = 'SELECT * FROM categories';
     const params = [];
     
+    const conditions = [];
+
     if (type) {
-      sql += ' WHERE type = ?';
+      conditions.push('type = ?');
       params.push(type);
+    }
+
+    if (search) {
+      conditions.push('name LIKE ?');
+      params.push(`%${search}%`);
+    }
+
+    if (conditions.length > 0) {
+      sql += ` WHERE ${conditions.join(' AND ')}`;
     }
     
     sql += ' ORDER BY sort_order ASC, id ASC';
@@ -26,7 +37,18 @@ exports.getAllCategories = async (req, res) => {
 // 获取标签列表
 exports.getAllTags = async (req, res) => {
   try {
-    const [rows] = await db.query('SELECT * FROM tags ORDER BY id ASC');
+    const { search } = req.query;
+    const params = [];
+    let sql = 'SELECT * FROM tags';
+
+    if (search) {
+      sql += ' WHERE name LIKE ?';
+      params.push(`%${search}%`);
+    }
+
+    sql += ' ORDER BY id ASC';
+
+    const [rows] = await db.query(sql, params);
     res.json({ success: true, data: rows });
   } catch (error) {
     console.error('Error fetching tags:', error);
@@ -93,8 +115,28 @@ exports.getSampleModels = async (req, res) => {
 exports.createCategory = async (req, res) => {
   try {
     const { name, icon, type, sort_order } = req.body;
+    const normalizedName = (name || '').trim();
+    const normalizedType = (type || '').trim();
+
+    if (!normalizedName) {
+      return res.status(400).json({ success: false, message: '分类名称不能为空' });
+    }
+
+    if (!['model', 'app'].includes(normalizedType)) {
+      return res.status(400).json({ success: false, message: '分类类型不合法' });
+    }
+
+    const [existsRows] = await db.query(
+      'SELECT id FROM categories WHERE type = ? AND LOWER(name) = LOWER(?) LIMIT 1',
+      [normalizedType, normalizedName]
+    );
+
+    if (existsRows.length > 0) {
+      return res.status(400).json({ success: false, message: '该类型下已存在同名分类' });
+    }
+
     const sql = 'INSERT INTO categories (name, icon, type, sort_order) VALUES (?, ?, ?, ?)';
-    const [result] = await db.query(sql, [name, icon || null, type, sort_order || 0]);
+    const [result] = await db.query(sql, [normalizedName, icon || null, normalizedType, sort_order || 0]);
     res.json({ success: true, message: '创建成功', id: result.insertId });
   } catch (error) {
     console.error('Error creating category:', error);
@@ -107,8 +149,28 @@ exports.updateCategory = async (req, res) => {
   try {
     const { id } = req.params;
     const { name, icon, type, sort_order } = req.body;
+    const normalizedName = (name || '').trim();
+    const normalizedType = (type || '').trim();
+
+    if (!normalizedName) {
+      return res.status(400).json({ success: false, message: '分类名称不能为空' });
+    }
+
+    if (!['model', 'app'].includes(normalizedType)) {
+      return res.status(400).json({ success: false, message: '分类类型不合法' });
+    }
+
+    const [existsRows] = await db.query(
+      'SELECT id FROM categories WHERE type = ? AND LOWER(name) = LOWER(?) AND id <> ? LIMIT 1',
+      [normalizedType, normalizedName, id]
+    );
+
+    if (existsRows.length > 0) {
+      return res.status(400).json({ success: false, message: '该类型下已存在同名分类' });
+    }
+
     const sql = 'UPDATE categories SET name = ?, icon = ?, type = ?, sort_order = ? WHERE id = ?';
-    await db.query(sql, [name, icon || null, type, sort_order || 0, id]);
+    await db.query(sql, [normalizedName, icon || null, normalizedType, sort_order || 0, id]);
     res.json({ success: true, message: '更新成功' });
   } catch (error) {
     console.error('Error updating category:', error);

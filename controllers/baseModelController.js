@@ -3,13 +3,24 @@ const db = require('../config/database');
 // 获取所有基座模型
 exports.getAllBaseModels = async (req, res) => {
   try {
-    const { active_only } = req.query;
+    const { active_only, search } = req.query;
     
     let sql = 'SELECT * FROM base_models';
     const params = [];
     
+    const conditions = [];
+
     if (active_only === 'true') {
-      sql += ' WHERE is_active = 1';
+      conditions.push('is_active = 1');
+    }
+
+    if (search) {
+      conditions.push('name LIKE ?');
+      params.push(`%${search}%`);
+    }
+
+    if (conditions.length > 0) {
+      sql += ` WHERE ${conditions.join(' AND ')}`;
     }
     
     sql += ' ORDER BY sort_order ASC, created_at DESC';

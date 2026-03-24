@@ -3,7 +3,7 @@ const db = require('../config/database');
 // 获取所有应用
 exports.getAllApps = async (req, res) => {
   try {
-    const { category, sort = 'upvotes', search } = req.query;
+    const { category, sort = 'latest', search } = req.query;
     
     let sql = `
       SELECT a.*, c.name as category_name,
@@ -23,8 +23,8 @@ exports.getAllApps = async (req, res) => {
     }
     
     if (search) {
-      conditions.push('(a.name LIKE ? OR a.developer LIKE ? OR a.description LIKE ?)');
-      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+      conditions.push('a.name LIKE ?');
+      params.push(`%${search}%`);
     }
     
     if (conditions.length > 0) {
@@ -38,11 +38,14 @@ exports.getAllApps = async (req, res) => {
       case 'views':
         sql += ' ORDER BY a.views DESC';
         break;
+      case 'upvotes':
+        sql += ' ORDER BY a.upvotes DESC';
+        break;
       case 'latest':
         sql += ' ORDER BY a.created_at DESC';
         break;
       default:
-        sql += ' ORDER BY a.upvotes DESC';
+        sql += ' ORDER BY a.created_at DESC';
     }
     
     const [rows] = await db.query(sql, params);
@@ -132,24 +135,37 @@ exports.createApp = async (req, res) => {
     const {
       name, developer, avatar, icon_bg, category_id,
       description, detail, version, base_model,
-      website_url, comparison, tags, upvotes, download_links
+      website_url, comparison, tags, upvotes, downloads, stars, download_links
     } = req.body;
 
     const normalizedUpvotes = Number.isFinite(Number(upvotes)) ? Number(upvotes) : 0;
+    const normalizedDownloads = Number.isFinite(Number(downloads)) ? Number(downloads) : 0;
+    const normalizedStars = Number.isFinite(Number(stars)) ? Number(stars) : 0;
+    const normalizedCategoryId = category_id ? Number(category_id) : null;
+
+    if (normalizedCategoryId) {
+      const [categoryRows] = await db.query(
+        'SELECT id FROM categories WHERE id = ? LIMIT 1',
+        [normalizedCategoryId]
+      );
+      if (categoryRows.length === 0) {
+        return res.status(400).json({ success: false, message: '分类不存在' });
+      }
+    }
     
     const sql = `
       INSERT INTO apps (
         name, developer, avatar, icon_bg, category_id,
         description, detail, version, base_model,
-        website_url, comparison, upvotes, download_links
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        website_url, comparison, upvotes, downloads, stars, download_links
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     
     const [result] = await db.query(sql, [
       name, developer, avatar || null, icon_bg || null,
-      category_id || null, description || null, detail || null,
+      normalizedCategoryId, description || null, detail || null,
       version || null, base_model || null, website_url || null,
-      comparison || null, normalizedUpvotes, JSON.stringify(download_links || [])
+      comparison || null, normalizedUpvotes, normalizedDownloads, normalizedStars, JSON.stringify(download_links || [])
     ]);
     
     const appId = result.insertId;
@@ -174,25 +190,38 @@ exports.updateApp = async (req, res) => {
     const {
       name, developer, avatar, icon_bg, category_id,
       description, detail, version, base_model,
-      website_url, comparison, tags, upvotes, download_links
+      website_url, comparison, tags, upvotes, downloads, stars, download_links
     } = req.body;
 
     const normalizedUpvotes = Number.isFinite(Number(upvotes)) ? Number(upvotes) : 0;
+    const normalizedDownloads = Number.isFinite(Number(downloads)) ? Number(downloads) : 0;
+    const normalizedStars = Number.isFinite(Number(stars)) ? Number(stars) : 0;
+    const normalizedCategoryId = category_id ? Number(category_id) : null;
+
+    if (normalizedCategoryId) {
+      const [categoryRows] = await db.query(
+        'SELECT id FROM categories WHERE id = ? LIMIT 1',
+        [normalizedCategoryId]
+      );
+      if (categoryRows.length === 0) {
+        return res.status(400).json({ success: false, message: '分类不存在' });
+      }
+    }
     
     const sql = `
       UPDATE apps SET
         name = ?, developer = ?, avatar = ?, icon_bg = ?,
         category_id = ?, description = ?, detail = ?,
         version = ?, base_model = ?, website_url = ?,
-        comparison = ?, upvotes = ?, download_links = ?
+        comparison = ?, upvotes = ?, downloads = ?, stars = ?, download_links = ?
       WHERE id = ?
     `;
     
     const [updateResult] = await db.query(sql, [
       name, developer, avatar || null, icon_bg || null,
-      category_id || null, description || null, detail || null,
+      normalizedCategoryId, description || null, detail || null,
       version || null, base_model || null, website_url || null,
-      comparison || null, normalizedUpvotes, JSON.stringify(download_links || []), id
+      comparison || null, normalizedUpvotes, normalizedDownloads, normalizedStars, JSON.stringify(download_links || []), id
     ]);
 
     if (!updateResult.affectedRows) {

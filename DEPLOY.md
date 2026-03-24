@@ -78,7 +78,7 @@ GRANT ALL PRIVILEGES ON deepseek_club.* TO 'deepseek'@'你的应用服务器IP';
 FLUSH PRIVILEGES;
 ```
 
-> 例如，当前应用服务器公网 IP 是 `154.13.6.7`，则 host 写成 `'154.13.6.7'`。
+> 例如，当前应用服务器公网 IP 是 `127.0.0.1`，则 host 写成 `'127.0.0.1'`。
 
 #### 4.2 导入初始化 SQL（如需要）
 
@@ -130,8 +130,8 @@ CORS_ORIGIN=http://localhost:5173,http://localhost:5174
 # CORS_ORIGIN=https://your-frontend-domain.com
 ```
 
-> 注意：如果 MySQL 和 Node 服务在**不同服务器**，`DB_HOST` 必须是数据库服务器的 IP/域名，并在 MySQL 中为该 IP 配置允许访问的用户（如 `'deepseek'@'154.13.6.7'`）。  
-> 否则会出现 `Access denied for user 'xxx'@'154.13.6.7'` 的错误。
+> 注意：如果 MySQL 和 Node 服务在**不同服务器**，`DB_HOST` 必须是数据库服务器的 IP/域名，并在 MySQL 中为该 IP 配置允许访问的用户（如 `'deepseek'@'127.0.0.1'`）。  
+> 否则会出现 `Access denied for user 'xxx'@'127.0.0.1'` 的错误。
 
 ---
 
@@ -147,8 +147,8 @@ npm start
 看到控制台输出类似：
 
 ```text
-DeepSeek Club Server is running on http://localhost:3000
-API Health Check: http://localhost:3000/model_api/health
+DeepSeek Club Server is running on https://deepseek.club
+API Health Check: https://deepseek.club/model_api/health
 ```
 
 说明服务启动成功。
@@ -189,7 +189,7 @@ pm2 save
 #### 7.1 在服务器本机测试
 
 ```bash
-curl http://localhost:3000/model_api/health
+curl https://deepseek.club/model_api/health
 ```
 
 预期返回：
@@ -201,17 +201,17 @@ curl http://localhost:3000/model_api/health
 你也可以测试具体业务接口（部分示例，视项目路由而定）：
 
 ```bash
-curl http://localhost:3000/model_api/models
-curl http://localhost:3000/model_api/apps
-curl http://localhost:3000/model_api/base-models
-curl http://localhost:3000/model_api/categories
-curl http://localhost:3000/model_api/tags
+curl https://deepseek.club/model_api/models
+curl https://deepseek.club/model_api/apps
+curl https://deepseek.club/model_api/base-models
+curl https://deepseek.club/model_api/categories
+curl https://deepseek.club/model_api/tags
 ```
 
 如果出现 `Access denied for user ...`，请重点检查：
 
 - `.env` 中的 `DB_HOST / DB_USER / DB_PASSWORD` 是否正确；
-- MySQL 中是否为 `DB_USER` 配置了正确的 host（如 `'deepseek'@'154.13.6.7'`）；
+- MySQL 中是否为 `DB_USER` 配置了正确的 host（如 `'deepseek'@'127.0.0.1'`）；
 - 应用服务器是否可以通过 `mysql -h <DB_HOST> -u <DB_USER> -p` 连上数据库。
 
 #### 7.2 从外部访问
@@ -257,13 +257,13 @@ sudo systemctl reload nginx
 
 ### 9. 常见问题
 
-- **报错：`Access denied for user 'xxx'@'154.13.6.7'`**
+- **报错：`Access denied for user 'xxx'@'127.0.0.1'`**
   - 确认 `.env` 中 `DB_HOST` 是数据库真实地址；
   - 在 MySQL 中为该 IP 创建用户并授权，例如：
 
     ```sql
-    CREATE USER 'deepseek'@'154.13.6.7' IDENTIFIED BY 'your_password';
-    GRANT ALL PRIVILEGES ON deepseek_club.* TO 'deepseek'@'154.13.6.7';
+    CREATE USER 'deepseek'@'127.0.0.1' IDENTIFIED BY 'your_password';
+    GRANT ALL PRIVILEGES ON deepseek_club.* TO 'deepseek'@'127.0.0.1';
     FLUSH PRIVILEGES;
     ```
 

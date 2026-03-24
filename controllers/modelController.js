@@ -23,8 +23,8 @@ exports.getAllModels = async (req, res) => {
     }
     
     if (search) {
-      conditions.push('(m.name LIKE ? OR m.author LIKE ? OR m.description LIKE ?)');
-      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+      conditions.push('m.name LIKE ?');
+      params.push(`%${search}%`);
     }
     
     // 基座模型筛选（多选，OR逻辑）
@@ -193,15 +193,19 @@ exports.createModel = async (req, res) => {
     const {
       name, author, avatar, version, base_model, category_id,
       description, readme, prompt_example, comparison, model_type,
-      download_links, files, tags
+      download_links, files, tags, likes, downloads, stars
     } = req.body;
+
+    const normalizedLikes = Number.isFinite(Number(likes)) ? Number(likes) : 0;
+    const normalizedDownloads = Number.isFinite(Number(downloads)) ? Number(downloads) : 0;
+    const normalizedStars = Number.isFinite(Number(stars)) ? Number(stars) : 0;
     
     const sql = `
       INSERT INTO models (
         name, author, avatar, version, base_model, category_id,
         description, readme, prompt_example, comparison, model_type,
-        download_links, files
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        download_links, files, likes, downloads, stars
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     
     const [result] = await db.query(sql, [
@@ -209,7 +213,10 @@ exports.createModel = async (req, res) => {
       category_id || null, description || null, readme || null,
       prompt_example || null, comparison || null, model_type || null,
       JSON.stringify(download_links || []),
-      JSON.stringify(files || [])
+      JSON.stringify(files || []),
+      normalizedLikes,
+      normalizedDownloads,
+      normalizedStars
     ]);
     
     const modelId = result.insertId;
@@ -234,14 +241,19 @@ exports.updateModel = async (req, res) => {
     const {
       name, author, avatar, version, base_model, category_id,
       description, readme, prompt_example, comparison, model_type,
-      download_links, files, tags
+      download_links, files, tags, likes, downloads, stars
     } = req.body;
+
+    const normalizedLikes = Number.isFinite(Number(likes)) ? Number(likes) : 0;
+    const normalizedDownloads = Number.isFinite(Number(downloads)) ? Number(downloads) : 0;
+    const normalizedStars = Number.isFinite(Number(stars)) ? Number(stars) : 0;
     
     const sql = `
       UPDATE models SET
         name = ?, author = ?, avatar = ?, version = ?, base_model = ?,
         category_id = ?, description = ?, readme = ?, prompt_example = ?,
-        comparison = ?, model_type = ?, download_links = ?, files = ?
+        comparison = ?, model_type = ?, download_links = ?, files = ?,
+        likes = ?, downloads = ?, stars = ?
       WHERE id = ?
     `;
     
@@ -251,6 +263,9 @@ exports.updateModel = async (req, res) => {
       prompt_example || null, comparison || null, model_type || null,
       JSON.stringify(download_links || []),
       JSON.stringify(files || []),
+      normalizedLikes,
+      normalizedDownloads,
+      normalizedStars,
       id
     ]);
     

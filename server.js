@@ -18,6 +18,7 @@ const baseModelRoutes = require('./routes/baseModels');
 const commonRoutes = require('./routes/common');
 const eventsRoutes = require('./routes/events');
 const projectsRoutes = require('./routes/projects');
+const db = require('./config/database');
 
 // 统一后端前缀为 /model_api
 app.use('/model_api/models', modelRoutes);
@@ -43,10 +44,40 @@ app.use((err, req, res, next) => {
   res.status(500).json({ success: false, message: 'Internal server error' });
 });
 
-// 启动服务器
-app.listen(PORT, () => {
-  console.log(`🚀 DeepSeek Club Server is running on http://localhost:${PORT}`);
-  console.log(`📊 API Health Check: http://localhost:${PORT}/model_api/health`);
-});
+const ensureColumn = async (tableName, columnName, columnSql) => {
+  const [rows] = await db.query(
+    `
+    SELECT 1
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = ?
+      AND COLUMN_NAME = ?
+    LIMIT 1
+    `,
+    [tableName, columnName],
+  );
+
+  if (rows.length === 0) {
+    await db.query(`ALTER TABLE ${tableName} ADD COLUMN ${columnSql}`);
+    console.log(`✅ Added missing column ${tableName}.${columnName}`);
+  }
+};
+
+const bootstrap = async () => {
+  try {
+    await ensureColumn('models', 'stars', 'stars INT DEFAULT 0 COMMENT "Star数"');
+    await ensureColumn('apps', 'downloads', 'downloads INT DEFAULT 0 COMMENT "下载量"');
+    await ensureColumn('apps', 'stars', 'stars INT DEFAULT 0 COMMENT "Star数"');
+  } catch (error) {
+    console.error('⚠️ Failed to ensure stats columns:', error.message);
+  }
+
+  app.listen(PORT, () => {
+    console.log(`🚀 DeepSeek Club Server is running on http://localhost:${PORT}`);
+    console.log(`📊 API Health Check: http://localhost:${PORT}/model_api/health`);
+  });
+};
+
+bootstrap();
 
 module.exports = app;
