@@ -41,6 +41,9 @@ exports.getStats = async (req, res) => {
     const [apps] = await db.query('SELECT COUNT(*) as count, SUM(upvotes) as total_upvotes FROM apps');
     const [categories] = await db.query('SELECT COUNT(*) as count FROM categories');
     const [tags] = await db.query('SELECT COUNT(*) as count FROM tags');
+
+    const [events] = await db.query("SELECT COUNT(*) as count, SUM(current_participants) as total_current_participants FROM events");
+    const [projects] = await db.query('SELECT COUNT(*) as count, SUM(stars) as total_stars FROM projects');
     
     res.json({
       success: true,
@@ -53,6 +56,14 @@ exports.getStats = async (req, res) => {
         apps: {
           count: apps[0].count,
           totalUpvotes: apps[0].total_upvotes || 0
+        },
+        events: {
+          count: events[0].count,
+          totalCurrentParticipants: events[0].total_current_participants || 0,
+        },
+        projects: {
+          count: projects[0].count,
+          totalStars: projects[0].total_stars || 0,
         },
         categories: categories[0].count,
         tags: tags[0].count

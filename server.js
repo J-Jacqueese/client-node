@@ -16,11 +16,15 @@ const modelRoutes = require('./routes/models');
 const appRoutes = require('./routes/apps');
 const baseModelRoutes = require('./routes/baseModels');
 const commonRoutes = require('./routes/common');
+const eventsRoutes = require('./routes/events');
+const projectsRoutes = require('./routes/projects');
 
 // 统一后端前缀为 /model_api
 app.use('/model_api/models', modelRoutes);
 app.use('/model_api/apps', appRoutes);
 app.use('/model_api/base-models', baseModelRoutes);
+app.use('/model_api/events', eventsRoutes);
+app.use('/model_api/projects', projectsRoutes);
 app.use('/model_api', commonRoutes);
 
 // 健康检查
