@@ -1,15 +1,23 @@
 const express = require('express');
+const path = require('path');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 require('dotenv').config();
+
+const eventImageUpload = require('./middleware/eventImageUpload');
+const uploadController = require('./controllers/uploadController');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // 中间件
 app.use(cors());
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.json({ limit: '2mb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '2mb' }));
+
+// 活动图片上传（需在 express.static('/model_api/uploads') 之前注册，避免与静态路由冲突）
+app.post('/model_api/upload/event-image', eventImageUpload.single('file'), uploadController.sendEventUploadResult);
+app.use('/model_api/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // 路由
 const modelRoutes = require('./routes/models');
@@ -40,6 +48,12 @@ app.use((req, res) => {
 
 // 错误处理
 app.use((err, req, res, next) => {
+  if (err && err.message === '仅支持 jpeg/png/gif/webp 图片') {
+    return res.status(400).json({ success: false, message: err.message });
+  }
+  if (err && err.code === 'LIMIT_FILE_SIZE') {
+    return res.status(400).json({ success: false, message: '文件过大（最大 8MB）' });
+  }
   console.error(err.stack);
   res.status(500).json({ success: false, message: 'Internal server error' });
 });
@@ -68,6 +82,11 @@ const bootstrap = async () => {
     await ensureColumn('models', 'stars', 'stars INT DEFAULT 0 COMMENT "Star数"');
     await ensureColumn('apps', 'downloads', 'downloads INT DEFAULT 0 COMMENT "下载量"');
     await ensureColumn('apps', 'stars', 'stars INT DEFAULT 0 COMMENT "Star数"');
+    await ensureColumn(
+      'events',
+      'sort_weight',
+      'sort_weight INT NOT NULL DEFAULT 0 COMMENT "列表排序权重，越大越靠前"'
+    );
   } catch (error) {
     console.error('⚠️ Failed to ensure stats columns:', error.message);
   }

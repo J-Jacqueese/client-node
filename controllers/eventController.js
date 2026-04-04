@@ -83,17 +83,17 @@ exports.getAllEvents = async (req, res) => {
       sql += ' WHERE ' + conditions.join(' AND ') + '\n';
     }
 
-    // 排序
+    // 排序：同权重下再按业务字段（sort_weight 越大越靠前）
     const order = (() => {
       switch (sort) {
         case 'likes':
-          return 'e.likes DESC';
+          return 'e.sort_weight DESC, e.likes DESC';
         case 'start_asc':
-          return 'e.start_date ASC';
+          return 'e.sort_weight DESC, e.start_date ASC';
         case 'start_desc':
-          return 'e.start_date DESC';
+          return 'e.sort_weight DESC, e.start_date DESC';
         default:
-          return 'e.created_at DESC';
+          return 'e.sort_weight DESC, e.created_at DESC';
       }
     })();
 
@@ -176,6 +176,7 @@ exports.submitEvent = async (req, res) => {
       sponsors,
       registration_url,
       organizer_logo,
+      sort_weight,
     } = req.body;
 
     if (!title || !type || !mode || !city || !start_date || !end_date || !organizer) {
@@ -185,6 +186,11 @@ exports.submitEvent = async (req, res) => {
     const nextId = id ? String(id) : slugify(title) + '-' + Date.now().toString().slice(-6);
     const normalizedStartDate = dateOnly(start_date);
     const normalizedEndDate = dateOnly(end_date);
+
+    const sw =
+      sort_weight === '' || sort_weight === null || sort_weight === undefined
+        ? 0
+        : Math.max(0, Math.min(999999, Number(sort_weight) || 0));
 
     const [result] = await db.query(
       `
@@ -197,9 +203,10 @@ exports.submitEvent = async (req, res) => {
         speakers, tags, max_participants, current_participants, price,
         highlights, agenda, sponsors,
         registration_url,
+        sort_weight,
         likes,
         approval_status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
       `,
       [
         nextId,
@@ -226,6 +233,7 @@ exports.submitEvent = async (req, res) => {
         JSON.stringify(agenda || []),
         JSON.stringify(sponsors || []),
         registration_url || null,
+        sw,
         0,
       ]
     );
@@ -266,7 +274,13 @@ exports.updateEvent = async (req, res) => {
       registration_url,
       likes,
       approval_status,
+      sort_weight,
     } = req.body;
+
+    const sw =
+      sort_weight === '' || sort_weight === null || sort_weight === undefined
+        ? 0
+        : Math.max(0, Math.min(999999, Number(sort_weight) || 0));
 
     const [result] = await db.query(
       `
@@ -294,6 +308,7 @@ exports.updateEvent = async (req, res) => {
         agenda = ?,
         sponsors = ?,
         registration_url = ?,
+        sort_weight = ?,
         likes = ?,
         approval_status = ?
       WHERE id = ?
@@ -322,6 +337,7 @@ exports.updateEvent = async (req, res) => {
         JSON.stringify(agenda || []),
         JSON.stringify(sponsors || []),
         registration_url || null,
+        sw,
         likes === '' || likes === null || likes === undefined ? 0 : Number(likes),
         approval_status || 'pending',
         id,

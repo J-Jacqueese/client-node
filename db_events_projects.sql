@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS events (
   agenda JSON NULL,
   sponsors JSON NULL,
   registration_url VARCHAR(255) NULL,
+  sort_weight INT NOT NULL DEFAULT 0 COMMENT '列表排序权重，越大越靠前',
   likes INT DEFAULT 0,
   approval_status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'approved',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
