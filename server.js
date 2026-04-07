@@ -26,6 +26,7 @@ const baseModelRoutes = require('./routes/baseModels');
 const commonRoutes = require('./routes/common');
 const eventsRoutes = require('./routes/events');
 const projectsRoutes = require('./routes/projects');
+const hotTopicsRoutes = require('./routes/hotTopics');
 const db = require('./config/database');
 
 // 统一后端前缀为 /model_api
@@ -35,6 +36,7 @@ app.use('/model_api/base-models', baseModelRoutes);
 app.use('/model_api/events', eventsRoutes);
 app.use('/model_api/projects', projectsRoutes);
 app.use('/model_api', commonRoutes);
+app.use('/model_api', hotTopicsRoutes);
 
 // 健康检查
 app.get('/model_api/health', (req, res) => {
