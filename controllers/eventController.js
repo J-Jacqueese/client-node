@@ -183,7 +183,18 @@ exports.submitEvent = async (req, res) => {
       return res.status(400).json({ success: false, message: '请填写必填项' });
     }
 
-    const nextId = id ? String(id) : slugify(title) + '-' + Date.now().toString().slice(-6);
+    // 生成数字编号：查询当前最大编号+1
+    let nextId;
+    if (id) {
+      nextId = String(id);
+    } else {
+      const [maxIdResult] = await db.query(
+        "SELECT MAX(CAST(id AS UNSIGNED)) as max_id FROM events WHERE id REGEXP '^[0-9]+$'"
+      );
+      const maxId = maxIdResult[0]?.max_id || 0;
+      nextId = String(maxId + 1);
+    }
+
     const normalizedStartDate = dateOnly(start_date);
     const normalizedEndDate = dateOnly(end_date);
 
@@ -496,3 +507,64 @@ exports.registerEvent = async (req, res) => {
   }
 };
 
+// 获取所有报名记录
+exports.getAllRegistrations = async (req, res) => {
+  try {
+    const { event_id, search } = req.query;
+    
+    let sql = `
+      SELECT r.*, e.title as event_title
+      FROM event_registrations r
+      LEFT JOIN events e ON r.event_id = e.id
+      WHERE 1=1
+    `;
+    const params = [];
+    
+    if (event_id) {
+      sql += ' AND r.event_id = ?';
+      params.push(event_id);
+    }
+    
+    if (search) {
+      sql += ' AND (r.name LIKE ? OR r.email LIKE ? OR r.phone LIKE ?)';
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+    }
+    
+    sql += ' ORDER BY r.created_at DESC';
+    
+    const [rows] = await db.query(sql, params);
+    res.json({ success: true, data: rows });
+  } catch (error) {
+    console.error('Error fetching registrations:', error);
+    res.status(500).json({ success: false, message: '获取报名列表失败' });
+  }
+};
+
+// 获取报名统计
+exports.getRegistrationStats = async (req, res) => {
+  try {
+    const [eventStats] = await db.query(`
+      SELECT e.id, e.title, e.max_participants, e.current_participants,
+             COUNT(r.id) as registration_count
+      FROM events e
+      LEFT JOIN event_registrations r ON e.id = r.event_id
+      GROUP BY e.id
+      ORDER BY e.created_at DESC
+    `);
+    
+    const [totalStats] = await db.query(`
+      SELECT COUNT(*) as total_registrations FROM event_registrations
+    `);
+    
+    res.json({ 
+      success: true, 
+      data: {
+        events: eventStats,
+        total: totalStats[0]?.total_registrations || 0
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching registration stats:', error);
+    res.status(500).json({ success: false, message: '获取报名统计失败' });
+  }
+};

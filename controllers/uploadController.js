@@ -9,3 +9,10 @@ exports.sendEventUploadResult = (req, res) => {
   res.json({ success: true, url });
 };
 
+exports.sendAppIconUploadResult = (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ success: false, message: '未选择文件或文件类型不支持' });
+  }
+  const url = `/model_api/uploads/apps/${req.file.filename}`;
+  res.json({ success: true, url });
+};

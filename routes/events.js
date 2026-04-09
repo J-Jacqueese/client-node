@@ -17,5 +17,10 @@ router.patch('/:id/approval', eventController.approveEvent);
 router.post('/:id/like', eventController.likeEvent);
 router.post('/:id/register', eventController.registerEvent);
 
+// 报名管理（后台）- 注意：这些路由要放在 /:id 路由之前，但这里的路由顺序已经固定
+// 实际上应该放在 router.get('/:id') 之前，但为了兼容现有API，我们使用不同的路径
+router.get('/admin/registrations', eventController.getAllRegistrations);
+router.get('/admin/registrations/stats', eventController.getRegistrationStats);
+
 module.exports = router;
 

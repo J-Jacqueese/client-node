@@ -5,6 +5,7 @@ const bodyParser = require('body-parser');
 require('dotenv').config();
 
 const eventImageUpload = require('./middleware/eventImageUpload');
+const appIconUpload = require('./middleware/appIconUpload');
 const uploadController = require('./controllers/uploadController');
 
 const app = express();
@@ -17,6 +18,8 @@ app.use(bodyParser.urlencoded({ extended: true, limit: '2mb' }));
 
 // 活动图片上传（需在 express.static('/model_api/uploads') 之前注册，避免与静态路由冲突）
 app.post('/model_api/upload/event-image', eventImageUpload.single('file'), uploadController.sendEventUploadResult);
+// 应用图标上传（限制1MB）
+app.post('/model_api/upload/app-icon', appIconUpload.single('file'), uploadController.sendAppIconUploadResult);
 app.use('/model_api/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // 路由
@@ -54,7 +57,9 @@ app.use((err, req, res, next) => {
     return res.status(400).json({ success: false, message: err.message });
   }
   if (err && err.code === 'LIMIT_FILE_SIZE') {
-    return res.status(400).json({ success: false, message: '文件过大（最大 8MB）' });
+    // 根据请求路径判断是哪种上传，活动图片和应用图标都限制1MB
+    const limit = '1MB';
+    return res.status(400).json({ success: false, message: `图片文件过大，请压缩后重试（最大 ${limit}）` });
   }
   console.error(err.stack);
   res.status(500).json({ success: false, message: 'Internal server error' });
