@@ -43,7 +43,14 @@ exports.getAllEvents = async (req, res) => {
       city,
       sort,
       include_all,
+      page = 1,
+      pageSize = 20,
     } = req.query;
+
+    // 分页参数处理
+    const currentPage = Math.max(1, parseInt(page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(pageSize) || 20));
+    const offset = (currentPage - 1) * limit;
 
     const conditions = [];
     const params = [];
@@ -83,6 +90,11 @@ exports.getAllEvents = async (req, res) => {
       sql += ' WHERE ' + conditions.join(' AND ') + '\n';
     }
 
+    // 先查询总数
+    let countSql = `SELECT COUNT(*) as total FROM (${sql}) as t`;
+    const [countResult] = await db.query(countSql, [...params]);
+    const total = countResult[0]?.total || 0;
+
     // 排序：同权重下再按业务字段（sort_weight 越大越靠前）
     const order = (() => {
       switch (sort) {
@@ -99,6 +111,10 @@ exports.getAllEvents = async (req, res) => {
 
     sql += ` ORDER BY ${order}`;
 
+    // 分页
+    sql += ' LIMIT ? OFFSET ?';
+    params.push(limit, offset);
+
     const [rows] = await db.query(sql, params);
     const events = rows.map((r) => ({
       ...r,
@@ -109,7 +125,16 @@ exports.getAllEvents = async (req, res) => {
       sponsors: parseMaybeJson(r.sponsors, []),
     }));
 
-    res.json({ success: true, data: events });
+    res.json({ 
+      success: true, 
+      data: events,
+      pagination: {
+        page: currentPage,
+        pageSize: limit,
+        total,
+        totalPages: Math.ceil(total / limit)
+      }
+    });
   } catch (error) {
     console.error('Error fetching events:', error);
     res.status(500).json({ success: false, message: '获取活动列表失败' });
@@ -507,10 +532,15 @@ exports.registerEvent = async (req, res) => {
   }
 };
 
-// 获取所有报名记录
+// 获取所有报名记录（支持分页）
 exports.getAllRegistrations = async (req, res) => {
   try {
-    const { event_id, search } = req.query;
+    const { event_id, search, page = 1, pageSize = 20 } = req.query;
+    
+    // 分页参数处理
+    const currentPage = Math.max(1, parseInt(page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(pageSize) || 20));
+    const offset = (currentPage - 1) * limit;
     
     let sql = `
       SELECT r.*, e.title as event_title
@@ -530,10 +560,28 @@ exports.getAllRegistrations = async (req, res) => {
       params.push(`%${search}%`, `%${search}%`, `%${search}%`);
     }
     
+    // 先查询总数
+    let countSql = `SELECT COUNT(*) as total FROM (${sql}) as t`;
+    const [countResult] = await db.query(countSql, [...params]);
+    const total = countResult[0]?.total || 0;
+    
     sql += ' ORDER BY r.created_at DESC';
     
+    // 分页
+    sql += ' LIMIT ? OFFSET ?';
+    params.push(limit, offset);
+    
     const [rows] = await db.query(sql, params);
-    res.json({ success: true, data: rows });
+    res.json({ 
+      success: true, 
+      data: rows,
+      pagination: {
+        page: currentPage,
+        pageSize: limit,
+        total,
+        totalPages: Math.ceil(total / limit)
+      }
+    });
   } catch (error) {
     console.error('Error fetching registrations:', error);
     res.status(500).json({ success: false, message: '获取报名列表失败' });

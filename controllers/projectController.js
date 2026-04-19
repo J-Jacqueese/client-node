@@ -51,7 +51,14 @@ exports.getAllProjects = async (req, res) => {
       language,
       sort,
       include_all,
+      page = 1,
+      pageSize = 20,
     } = req.query;
+
+    // 分页参数处理
+    const currentPage = Math.max(1, parseInt(page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(pageSize) || 20));
+    const offset = (currentPage - 1) * limit;
 
     const conditions = [];
     const params = [];
@@ -82,6 +89,11 @@ exports.getAllProjects = async (req, res) => {
       sql += ' WHERE ' + conditions.join(' AND ') + '\n';
     }
 
+    // 先查询总数
+    let countSql = `SELECT COUNT(*) as total FROM (${sql}) as t`;
+    const [countResult] = await db.query(countSql, [...params]);
+    const total = countResult[0]?.total || 0;
+
     const order = (() => {
       switch (sort) {
         case 'trending':
@@ -98,13 +110,26 @@ exports.getAllProjects = async (req, res) => {
 
     sql += ` ORDER BY ${order}`;
 
+    // 分页
+    sql += ' LIMIT ? OFFSET ?';
+    params.push(limit, offset);
+
     const [rows] = await db.query(sql, params);
     const projects = rows.map((r) => ({
       ...r,
       topics: parseMaybeJson(r.topics, []),
     }));
 
-    res.json({ success: true, data: projects });
+    res.json({ 
+      success: true, 
+      data: projects,
+      pagination: {
+        page: currentPage,
+        pageSize: limit,
+        total,
+        totalPages: Math.ceil(total / limit)
+      }
+    });
   } catch (error) {
     console.error('Error fetching projects:', error);
     res.status(500).json({ success: false, message: '获取项目列表失败' });

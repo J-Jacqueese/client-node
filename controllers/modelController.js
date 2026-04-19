@@ -1,9 +1,14 @@
 const db = require('../config/database');
 
-// 获取所有模型
+// 获取所有模型（支持分页）
 exports.getAllModels = async (req, res) => {
   try {
-    const { category, sort = 'latest', search, base_models, tags } = req.query;
+    const { category, sort = 'latest', search, base_models, tags, page = 1, pageSize = 20 } = req.query;
+    
+    // 分页参数处理
+    const currentPage = Math.max(1, parseInt(page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(pageSize) || 20));
+    const offset = (currentPage - 1) * limit;
     
     let sql = `
       SELECT m.*, c.name as category_name,
@@ -53,6 +58,11 @@ exports.getAllModels = async (req, res) => {
       }
     }
     
+    // 先查询总数（使用子查询避免复杂 HAVING 的问题）
+    let countSql = `SELECT COUNT(*) as total FROM (${sql}) as t`;
+    const [countResult] = await db.query(countSql, [...params]);
+    const total = countResult[0]?.total || 0;
+    
     // 排序
     switch (sort) {
       case 'downloads':
@@ -64,6 +74,10 @@ exports.getAllModels = async (req, res) => {
       default:
         sql += ' ORDER BY m.created_at DESC';
     }
+    
+    // 分页
+    sql += ' LIMIT ? OFFSET ?';
+    params.push(limit, offset);
     
     const [rows] = await db.query(sql, params);
     
@@ -110,7 +124,16 @@ exports.getAllModels = async (req, res) => {
       };
     });
     
-    res.json({ success: true, data: models });
+    res.json({ 
+      success: true, 
+      data: models,
+      pagination: {
+        page: currentPage,
+        pageSize: limit,
+        total,
+        totalPages: Math.ceil(total / limit)
+      }
+    });
   } catch (error) {
     console.error('Error fetching models:', error);
     res.status(500).json({ success: false, message: '获取模型列表失败' });

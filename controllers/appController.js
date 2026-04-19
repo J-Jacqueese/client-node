@@ -1,9 +1,14 @@
 const db = require('../config/database');
 
-// 获取所有应用
+// 获取所有应用（支持分页）
 exports.getAllApps = async (req, res) => {
   try {
-    const { category, sort = 'latest', search } = req.query;
+    const { category, sort = 'latest', search, page = 1, pageSize = 20 } = req.query;
+    
+    // 分页参数处理
+    const currentPage = Math.max(1, parseInt(page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(pageSize) || 20));
+    const offset = (currentPage - 1) * limit;
     
     let sql = `
       SELECT a.*, c.name as category_name,
@@ -33,6 +38,11 @@ exports.getAllApps = async (req, res) => {
     
     sql += ' GROUP BY a.id';
     
+    // 先查询总数
+    let countSql = `SELECT COUNT(*) as total FROM (${sql}) as t`;
+    const [countResult] = await db.query(countSql, [...params]);
+    const total = countResult[0]?.total || 0;
+    
     // 排序
     switch (sort) {
       case 'views':
@@ -47,6 +57,10 @@ exports.getAllApps = async (req, res) => {
       default:
         sql += ' ORDER BY a.created_at DESC';
     }
+    
+    // 分页
+    sql += ' LIMIT ? OFFSET ?';
+    params.push(limit, offset);
     
     const [rows] = await db.query(sql, params);
     
@@ -71,7 +85,16 @@ exports.getAllApps = async (req, res) => {
       };
     });
     
-    res.json({ success: true, data: apps });
+    res.json({ 
+      success: true, 
+      data: apps,
+      pagination: {
+        page: currentPage,
+        pageSize: limit,
+        total,
+        totalPages: Math.ceil(total / limit)
+      }
+    });
   } catch (error) {
     console.error('Error fetching apps:', error);
     res.status(500).json({ success: false, message: '获取应用列表失败' });
